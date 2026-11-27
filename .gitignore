@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+build/
+
+# Node
+node_modules/
+web/dist/
+
+# Runtime data & secrets
+data/
+backend/data/
+.env
+*.db
+*.db-wal
+*.db-shm

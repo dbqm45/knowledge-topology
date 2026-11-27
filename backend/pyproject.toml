@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "knowledge-topology"
+version = "0.1.0"
+description = "Knowledge Topology: maps, measures and serves organisational knowledge (REST + MCP)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy>=2.0.30",
+  "alembic>=1.13",
+  "httpx>=0.27",
+  "numpy>=1.26",
+  "scikit-learn>=1.3",
+  "networkx>=3.2",
+  "qdrant-client>=1.9",
+  "mcp>=2,<3",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+local-embeddings = ["sentence-transformers>=3.0"]
+leiden = ["igraph>=0.11", "leidenalg>=0.10"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+kt = "kt.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kt*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110

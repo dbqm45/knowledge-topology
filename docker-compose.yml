@@ -1,0 +1,63 @@
+# Local stack: PostgreSQL (source of truth) + Qdrant (vectors) + API/UI + worker.
+# All ports are bound to 127.0.0.1 only.
+#   docker compose up -d --build
+#   docker compose run --rm demo          # optional: load the demo corpus
+#   open http://127.0.0.1:8000            # API key: see data/api-keys.json (dev keys after `demo`)
+name: knowledge-topology
+
+x-app: &app
+  build: .
+  image: knowledge-topology:local
+  env_file: [.env]
+  environment:
+    KT_DATABASE_URL: postgresql+psycopg://kt:${POSTGRES_PASSWORD:-kt}@postgres:5432/kt
+    KT_VECTOR_BACKEND: qdrant
+    KT_QDRANT_URL: http://qdrant:6333
+    KT_DATA_DIR: /data
+  volumes:
+    - ./data:/data
+    - ${KT_DOCS_DIR:-./demo}:/docs:ro
+  depends_on:
+    postgres: { condition: service_healthy }
+    qdrant: { condition: service_started }
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: kt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kt}
+      POSTGRES_DB: kt
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kt -d kt"]
+      interval: 3s
+      retries: 20
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports: ["127.0.0.1:6333:6333"]
+    volumes: [qdrant:/qdrant/storage]
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: ["sh", "-c", "alembic upgrade head && kt worker --interval ${KT_WORKER_INTERVAL:-900}"]
+    restart: unless-stopped
+
+  demo:
+    <<: *app
+    profiles: ["demo"]
+    command: ["sh", "-c", "alembic upgrade head && kt demo"]
+    restart: "no"
+
+volumes:
+  pgdata:
+  qdrant:
