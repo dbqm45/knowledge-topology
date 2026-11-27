@@ -30,8 +30,9 @@ z metryką, dokumentami i zgłoszeniem (issue). Rozmiar obszaru = skala wiedzy, 
   klasteryzacja hybrydowa (Leiden/Louvain + HDBSCAN), podobszary, stabilne ID klastrów (lineage),
   8 metryk jakości z confidence, wykrywanie sprzeczności/duplikatów/luk/sierot, Geometry Engine,
   stabilny layout, wersjonowane snapshoty.
-- **Retrieval** hybrydowy (wektor + BM25, RRF) z autorytatywnym ACL, budżetem tokenów i ostrzeżeniami
-  jakości (np. „to źródło jest sprzeczne z innym”).
+- **Retrieval** hybrydowy (wektor + BM25, RRF), opcjonalny **reranker cross-encoder** (lokalnie, np.
+  `BAAI/bge-reranker-v2-m3`), autorytatywny ACL, budżet tokenów i ostrzeżenia jakości
+  (np. „to źródło jest sprzeczne z innym”).
 - **REST API** (`/api/v1`, FastAPI, OpenAPI pod `/docs`) i **serwer MCP** (15 narzędzi, stdio lub HTTP) —
   oba na tej samej warstwie usług domenowych.
 - **Web UI** (React + Three.js): Overview, Universe 3D ⇄ Graph 2D, mapa obszaru z „Explain this connection”,
@@ -93,6 +94,15 @@ scripts\setup.ps1 -LocalEmbeddings
 $env:KT_EMBEDDING_PROVIDER = "sentence-transformers"; $env:KT_EMBEDDING_MODEL = "BAAI/bge-m3"
 $env:KT_RETRIEVAL_VECTOR_ONLY_MIN = "0.5"
 kt sync --full        # zmiana modelu = pełna reindeksacja
+```
+
+Reranker cross-encoder (drugi etap: czyta pytanie i fragment razem, poprawia kolejność najlepszych wyników;
+też lokalnie):
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[rerank]"
+$env:KT_RERANKER = "cross-encoder"; $env:KT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+$env:KT_RERANKER_MIN_SCORE = "0.05"
 ```
 
 ## Podłączenie istniejącego agenta (MCP)

@@ -20,7 +20,8 @@ def search(req: SearchRequest, svc: KnowledgeService = Depends(get_service)) -> 
     return svc.search(req.query, top_k=req.retrieval.top_k, domain_id=req.scope.domain_id,
                       source_ids=req.scope.source_ids or None, mode=req.retrieval.mode,
                       include_related=req.retrieval.include_related, include_evidence=req.retrieval.include_evidence,
-                      updated_after=req.filters.updated_after, max_tokens=req.retrieval.max_tokens)
+                      updated_after=req.filters.updated_after, max_tokens=req.retrieval.max_tokens,
+                      rerank=req.retrieval.rerank)
 
 
 @router.get("/documents/{document_id}")

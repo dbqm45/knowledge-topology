@@ -29,6 +29,7 @@ from kt.semantic.embeddings import Embedder
 from kt.storage.vector import VectorStore
 from kt.topology.views import domain_map_view, get_snapshot, topology_view, view_domain, visible_issue_ids
 
+_DEFAULT = object()  # sentinel: use the process-wide reranker from settings
 ISSUE_STATUSES = ("open", "investigating", "accepted", "resolved", "dismissed")
 
 
@@ -38,13 +39,17 @@ def _iso(dt: datetime | None) -> str | None:
 
 class KnowledgeService:
     def __init__(self, session: Session, principal: Principal, embedder: Embedder, vectors: VectorStore,
-                 settings: Settings | None = None):
+                 settings: Settings | None = None, reranker=_DEFAULT):
         self.s = session
         self.p = principal
         self.access = AccessService(session, principal)
         self.embedder, self.vectors = embedder, vectors
         self.settings = settings or get_settings()
-        self.retrieval = RetrievalService(session, self.access, embedder, vectors, self.settings)
+        if reranker is _DEFAULT:
+            from kt.retrieval.rerank import get_reranker
+
+            reranker = get_reranker()
+        self.retrieval = RetrievalService(session, self.access, embedder, vectors, self.settings, reranker)
 
     # ---------------------------------------------------------------- retrieval
     def search(self, query: str, **kwargs) -> dict:

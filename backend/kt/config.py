@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     # Calibrate per embedding model (hashing ≈ 0.3, BGE-M3 ≈ 0.5).
     retrieval_vector_only_min: float = 0.3
 
+    # Second-stage reranking of the fused candidates (see kt/retrieval/rerank.py).
+    reranker: Literal["none", "cross-encoder"] = "none"
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_candidates: int = 30  # how many fused chunks the cross-encoder reads
+    reranker_min_score: float = 0.0  # drop reranked chunks below this probability (e.g. 0.05 for bge-reranker)
+    reranker_max_length: int = 512
+    reranker_device: str | None = None  # "cpu", "cuda"... None = auto
+
     # Auth: JSON map api_key -> {"principal": "...", "groups": [...], "roles": [...]}
     api_keys: str = ""
     api_keys_file: Path | None = None

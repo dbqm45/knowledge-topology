@@ -20,6 +20,7 @@ KEYS = {
 def reset_caches() -> None:
     from kt import config
     from kt.db import session
+    from kt.retrieval import rerank
     from kt.retrieval import service as retrieval
     from kt.semantic import embeddings
     from kt.storage import vector
@@ -29,6 +30,8 @@ def reset_caches() -> None:
     embeddings.get_embedder.cache_clear()
     vector.get_vector_store.cache_clear()
     retrieval._LEXICAL_CACHE.clear()
+    if hasattr(rerank.get_reranker, "cache_clear"):  # may be monkeypatched in a test
+        rerank.get_reranker.cache_clear()
 
 
 def configure(monkeypatch, path: Path) -> None:

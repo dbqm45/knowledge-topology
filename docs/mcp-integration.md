@@ -68,6 +68,20 @@ Knowledge Retrieval Policy
 3. **Faza 3 — optymalizacja.** Ogranicz stare narzędzia wyszukiwania; strój `top_k`, `max_tokens`,
    progi retrieval; dodawaj kolejne przestrzenie i źródła.
 
+## Jak działa `search_knowledge`
+
+1. ACL: zbiór dokumentów, które wywołujący może czytać (zawężony do `domain_id`, jeśli podano).
+2. Kandydaci: wyszukiwanie wektorowe + BM25 (po 30), połączone przez Reciprocal Rank Fusion; progi
+   odrzucają trafienia tylko-wektorowe o niskim podobieństwie.
+3. **Reranker** (gdy `KT_RERANKER=cross-encoder`): cross-encoder czyta pytanie razem z każdym z najlepszych
+   `KT_RERANKER_CANDIDATES` fragmentów (tytuł > sekcja > treść); jego prawdopodobieństwo zastępuje wynik RRF,
+   fragmenty poniżej `KT_RERANKER_MIN_SCORE` odpadają. Reranker widzi wyłącznie fragmenty już przepuszczone przez ACL.
+4. Grupowanie po dokumentach (≤ 2 fragmenty na dokument), deduplikacja identycznych treści, budżet tokenów.
+5. Ostrzeżenia jakości z topologii (konflikty, duplikaty, nieaktualne źródła).
+
+`usage` w odpowiedzi pokazuje `reranker`, `reranked` i `rerank_ms`; w REST reranking można wyłączyć
+per zapytanie (`"retrieval": {"rerank": false}`), np. do porównań A/B.
+
 ## Pomiar oszczędności
 
 Każda odpowiedź `search_knowledge` zawiera `usage`:
