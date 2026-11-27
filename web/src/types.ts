@@ -133,14 +133,15 @@ export interface SearchResult {
     uri: string | null;
     score: number;
     retrieval_reasons: string[];
-    evidence: { chunk_id: string; section: string | null; quote: string | null; relevance: number; tokens: number }[];
+    evidence: { chunk_id: string; section: string | null; quote: string | null; relevance: number; tokens: number; rerank_score?: number | null }[];
     updated_at: string | null;
     owner: string | null;
   }[];
   related_entities: { id: string; name: string; type: string; mentions: number }[];
   related_areas: { domain_id: string; stable_key: string; label: string | null; health: number | null }[];
   warnings: { type: string; issue_id: string; severity: string; message: string; document_ids: string[] }[];
-  usage: { candidates: number; returned_chunks: number; estimated_tokens: number; budget_tokens: number };
+  usage: { candidates: number; returned_chunks: number; estimated_tokens: number; budget_tokens: number;
+           reranker?: string | null; reranked?: number; rerank_ms?: number };
 }
 
 export interface Snapshot {

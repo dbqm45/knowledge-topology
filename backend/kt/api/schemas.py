@@ -17,6 +17,7 @@ class RetrievalOptions(BaseModel):
     include_related: bool = True
     include_evidence: bool = True
     max_tokens: int | None = Field(None, ge=100, le=20000)
+    rerank: bool = True  # use the configured cross-encoder (no-op when KT_RERANKER=none)
 
 
 class SearchFilters(BaseModel):

@@ -46,7 +46,7 @@ export default function AgentView() {
           </div>
           {res && (
             <>
-              <p className="mono">{res.results.length} documents · {res.usage.returned_chunks} chunks · ~{res.usage.estimated_tokens}/{res.usage.budget_tokens} tokens · {res.usage.candidates} candidates</p>
+              <p className="mono">{res.results.length} documents · {res.usage.returned_chunks} chunks · ~{res.usage.estimated_tokens}/{res.usage.budget_tokens} tokens · {res.usage.candidates} candidates{res.usage.reranker ? ` · reranked ${res.usage.reranked} by ${res.usage.reranker} (${res.usage.rerank_ms} ms)` : " · no reranker"}</p>
               {res.warnings.map((w) => <div key={w.issue_id} className="quote" style={{ borderColor: "#7f1d1d" }}><span className={`sev ${w.severity}`}>{w.type}</span> {w.message}</div>)}
               {res.results.map((r) => (
                 <div key={r.document_id} className="quote">

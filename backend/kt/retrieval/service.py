@@ -8,6 +8,7 @@ within ``max_tokens``, with source links, versions, related entities and quality
 from __future__ import annotations
 
 import threading
+import time
 from collections import Counter
 from datetime import datetime, timezone
 
@@ -27,6 +28,7 @@ from kt.db.orm import (
     KnowledgeDomain,
 )
 from kt.entities.extraction import extract_mentions
+from kt.retrieval.rerank import Reranker
 from kt.semantic.embeddings import Embedder
 from kt.semantic.lexical import BM25Index
 from kt.storage.vector import VectorStore
@@ -79,14 +81,15 @@ def domain_documents(session: Session, tenant_id: str, domain_ref: str) -> set[s
 
 class RetrievalService:
     def __init__(self, session: Session, access: AccessService, embedder: Embedder, vectors: VectorStore,
-                 settings: Settings | None = None):
+                 settings: Settings | None = None, reranker: Reranker | None = None):
         self.s, self.access, self.embedder, self.vectors = session, access, embedder, vectors
         self.settings = settings or get_settings()
+        self.reranker = reranker
 
     def search(self, query: str, top_k: int = 8, domain_id: str | None = None, source_ids: list[str] | None = None,
                mode: str = "hybrid", include_related: bool = True, include_evidence: bool = True,
                updated_after: datetime | None = None, max_tokens: int | None = None,
-               chunks_per_document: int = 2) -> dict:
+               chunks_per_document: int = 2, rerank: bool = True) -> dict:
         tenant = self.access.tenant_id
         max_tokens = max_tokens or self.settings.context_budget_tokens
         allowed = set(self.access.readable_document_ids())
@@ -104,7 +107,8 @@ class RetrievalService:
                                                     else d.updated_at_source.replace(tzinfo=timezone.utc)) >= ua}
             scoped = True
         result = {"query": query, "results": [], "related_entities": [], "related_areas": [], "warnings": [],
-                  "usage": {"candidates": 0, "returned_chunks": 0, "estimated_tokens": 0, "budget_tokens": max_tokens}}
+                  "usage": {"candidates": 0, "returned_chunks": 0, "estimated_tokens": 0, "budget_tokens": max_tokens,
+                            "reranker": None, "reranked": 0}}
         if not allowed or not query.strip():
             return result
 
@@ -141,7 +145,7 @@ class RetrievalService:
                                            .join(Entity, Entity.id == EntityMention.entity_id)
                                            .where(EntityMention.document_id.in_({e["doc"] for e in ranked.values()}))):
                 doc_entities.setdefault(did, set()).add(key)
-        by_doc: dict[str, list[tuple[str, dict]]] = {}
+        pool: list[tuple[str, dict]] = []
         for cid, e in sorted(ranked.items(), key=lambda x: -x[1]["score"]):
             if cid not in chunks:
                 continue
@@ -152,6 +156,11 @@ class RetrievalService:
                 e["score"] *= 1.15
             if scoped:
                 e["reasons"].add("scope_match")
+            pool.append((cid, e))
+        if rerank and self.reranker is not None and pool:
+            pool = self._rerank(query, pool, chunks, result["usage"])
+        by_doc: dict[str, list[tuple[str, dict]]] = {}
+        for cid, e in pool:
             by_doc.setdefault(e["doc"], []).append((cid, e))
         if not by_doc:
             return result
@@ -175,7 +184,8 @@ class RetrievalService:
                 returned += 1
                 evidence.append({"chunk_id": cid, "section": " > ".join(c.heading_path or []) or None,
                                  "quote": c.content if include_evidence else None,
-                                 "relevance": round(e["score"] / best, 3), "tokens": c.token_count})
+                                 "relevance": round(e["score"] / best, 3), "tokens": c.token_count,
+                                 "rerank_score": e.get("rerank_score")})
             if not evidence:
                 continue
             top = max(by_doc[did], key=lambda x: x[1]["score"])[1]
@@ -195,6 +205,31 @@ class RetrievalService:
             result["related_areas"] = self._related_areas(result_docs)
         result["warnings"] = self._warnings(result_docs)
         return result
+
+    def _rerank(self, query: str, pool: list[tuple[str, dict]], chunks: dict[str, Chunk], usage: dict
+                ) -> list[tuple[str, dict]]:
+        """Cross-encoder pass over the best fused candidates. Its probability replaces the RRF score, so the
+        final order (and the relevance reported to the agent) reflects query–passage relevance."""
+        head = pool[: self.settings.reranker_candidates]
+        titles = dict(self.s.execute(select(Document.id, Document.title)
+                                     .where(Document.id.in_({e["doc"] for _, e in head}))).all())
+        passages = []
+        for cid, e in head:
+            c = chunks[cid]
+            header = " > ".join([titles.get(e["doc"], ""), *(c.heading_path or [])])
+            passages.append(f"{header}\n{c.content}"[:4000])
+        t0 = time.perf_counter()
+        scores = self.reranker.score(query, passages)
+        usage.update(reranker=self.reranker.model_id, reranked=len(head),
+                     rerank_ms=round((time.perf_counter() - t0) * 1000, 1))
+        out = []
+        for (cid, e), sc in zip(head, scores):
+            if sc < self.settings.reranker_min_score:
+                continue
+            e["fused_score"], e["score"], e["rerank_score"] = e["score"], float(sc), round(float(sc), 4)
+            e["reasons"].add("reranked")
+            out.append((cid, e))
+        return sorted(out, key=lambda x: -x[1]["score"])
 
     def _related_entities(self, doc_ids: list[str], limit: int = 8) -> list[dict]:
         cnt: Counter = Counter()
